@@ -8,5 +8,21 @@
 
 import Foundation
 
-print("Hello, World!")
+func showInfo(_ scalar: UnicodeScalar) {
+    print("""
+    Scalar: \(scalar)
+        ASCII: \(scalar.isASCII)
+        Value: \(scalar.value)
+        Alphanumeric: \(scalar.isAlphanumeric)
+        Digit: \(scalar.isDigit)
+        Hex: \(scalar.isHexDigit)
+        Horz WS: \(scalar.isHorizontalWhitespace)
+        WS: \(scalar.isWhitespace)
+        Printable: \(scalar.isPrintable)
+    """)
+}
 
+let scalars: [UnicodeScalar] = ["a", " ", "g", "Z", "9", "{", "\t", "~", ".", "\u{ffff}"]
+for s in scalars { showInfo(s) }
+
+print("Hello, World!")
