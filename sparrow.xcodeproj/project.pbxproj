@@ -10,6 +10,8 @@
 		EEB215F01F59C719005F25F7 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB215EF1F59C719005F25F7 /* main.swift */; };
 		EEB215F71F59C729005F25F7 /* UnicodeScalarInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB215F61F59C729005F25F7 /* UnicodeScalarInfo.swift */; };
 		EEB215F91F5A3A9A005F25F7 /* Scanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB215F81F5A3A9A005F25F7 /* Scanner.swift */; };
+		EEB215FB1F5AFD43005F25F7 /* Token.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB215FA1F5AFD43005F25F7 /* Token.swift */; };
+		EEB215FD1F5B029A005F25F7 /* Lexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB215FC1F5B029A005F25F7 /* Lexer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -29,6 +31,8 @@
 		EEB215EF1F59C719005F25F7 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		EEB215F61F59C729005F25F7 /* UnicodeScalarInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnicodeScalarInfo.swift; sourceTree = "<group>"; };
 		EEB215F81F5A3A9A005F25F7 /* Scanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scanner.swift; sourceTree = "<group>"; };
+		EEB215FA1F5AFD43005F25F7 /* Token.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Token.swift; sourceTree = "<group>"; };
+		EEB215FC1F5B029A005F25F7 /* Lexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Lexer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +68,8 @@
 				EEB215EF1F59C719005F25F7 /* main.swift */,
 				EEB215F61F59C729005F25F7 /* UnicodeScalarInfo.swift */,
 				EEB215F81F5A3A9A005F25F7 /* Scanner.swift */,
+				EEB215FA1F5AFD43005F25F7 /* Token.swift */,
+				EEB215FC1F5B029A005F25F7 /* Lexer.swift */,
 			);
 			path = sparrow;
 			sourceTree = "<group>";
@@ -129,6 +135,8 @@
 				EEB215F01F59C719005F25F7 /* main.swift in Sources */,
 				EEB215F91F5A3A9A005F25F7 /* Scanner.swift in Sources */,
 				EEB215F71F59C729005F25F7 /* UnicodeScalarInfo.swift in Sources */,
+				EEB215FB1F5AFD43005F25F7 /* Token.swift in Sources */,
+				EEB215FD1F5B029A005F25F7 /* Lexer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
