@@ -38,6 +38,8 @@ struct Token {
         
         case backslash
         
+        case comment
+        
         case eof
         case unknown
     }

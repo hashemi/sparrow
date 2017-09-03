@@ -43,6 +43,14 @@ class Lexer {
         case "\\": return formToken(.backslash, from: start)
         
         case "#": return hash()
+            
+        case "/" where scanner.match("/"):
+            skipSlashSlashComment()
+            return Token(.comment, "")
+        
+        case "/" where scanner.match("*"):
+            skipSlashStarComment()
+            return Token(.comment, "")
         
         default: return formToken(.unknown, from: start)
         }
@@ -115,6 +123,31 @@ class Lexer {
     
     func skipHashbang() {
         skipToEndOfLine()
+    }
+    
+    func skipSlashSlashComment() {
+        skipToEndOfLine()
+    }
+    
+    func skipSlashStarComment() {
+        var depth: UInt = 1
+        
+        while !scanner.isAtEnd {
+            switch scanner.advance() {
+            case "*" where scanner.match("/"):
+                depth -= 1
+                if depth == 0 { return }
+            case "/" where scanner.match("*"):
+                depth += 1
+
+            case "\n": fallthrough
+            case "\r": firstInLine = true
+            
+            default: break
+            }
+        }
+        
+        // unterminated slash star comment at eof
     }
     
     func formToken(_ kind: Token.Kind, from start: String.UnicodeScalarIndex) -> Token {

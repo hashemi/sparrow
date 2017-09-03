@@ -8,8 +8,10 @@
 
 let source = """
 #! /bin/sparrow
-#if
-#elseif
+#if // this is commented
+/**/#elseif/**/
+/* /* /* this is commented */ */ */
+/*/ this is commented */
 #endif
 """
 
