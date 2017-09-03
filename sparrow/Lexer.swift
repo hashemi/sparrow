@@ -27,7 +27,7 @@ class Lexer {
         case "\n": fallthrough
         case "\r":
             firstInLine = true
-            fallthrough
+            return whitespace()
         case _ where c.isWhitespace: return whitespace()
         
         case "@": return formToken(.atSign, from: start)
