@@ -122,4 +122,15 @@ extension UnicodeScalar {
     var isWhitespace: Bool {
         return !self.info.isDisjoint(with: [.horzWS, .vertWS, .space])
     }
+    
+    // CHAR_UPPER|CHAR_LOWER|CHAR_UNDER
+    var isClangIdentifierHead: Bool {
+        return !self.info.isDisjoint(with: [.upper, .lower, .under])
+    }
+    
+    // CHAR_UPPER|CHAR_LOWER|CHAR_DIGIT|CHAR_UNDER
+    var isClangIdentifierBody: Bool {
+        return !self.info.isDisjoint(with: [.upper, .lower, .digit, .under])
+    }
+    
 }
