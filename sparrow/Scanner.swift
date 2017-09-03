@@ -14,6 +14,10 @@ struct Scanner {
         return String(source.unicodeScalars[start..<current])
     }
     
+    var isAtStart: Bool {
+        return current == source.unicodeScalars.startIndex
+    }
+    
     var isAtEnd: Bool {
         return current >= source.unicodeScalars.endIndex
     }
@@ -40,9 +44,21 @@ struct Scanner {
         return result
     }
     
+    mutating func putback() {
+        current = source.unicodeScalars.index(before: current)
+    }
+    
+    mutating func rewind(to newIdx: String.UnicodeScalarIndex) {
+        current = newIdx
+    }
+    
     mutating func match(_ expected: UnicodeScalar) -> Bool {
+        return match { $0 == expected }
+    }
+    
+    mutating func match(_ filter: (UnicodeScalar) -> Bool) -> Bool {
         if isAtEnd { return false }
-        if peek != expected { return false }
+        if !filter(peek) { return false }
         
         advance()
         return true
