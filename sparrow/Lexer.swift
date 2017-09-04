@@ -77,6 +77,10 @@ class Lexer {
         case ".":
             return operatorIdentifier()
         
+
+        case _ where c.isIdentifierHead:
+            return identifier()
+
         default: return formToken(.unknown, from: start)
         }
         
@@ -277,6 +281,18 @@ class Lexer {
         case (false, true):
             return formToken(.operPrefix, with: text)
         }
+    }
+    
+    func identifier() -> Token {
+        scanner.putback()
+        let start = scanner.current
+        
+        _ = scanner.match { $0.isIdentifierHead }
+        scanner.skip { $0.isIdentifierBody }
+        
+        let text = scanner.text(from: start)
+        let kind = Token.Kind(keyword: text) ?? .identifier
+        return formToken(kind, with: text)
     }
     
     func skipToEndOfLine() {
