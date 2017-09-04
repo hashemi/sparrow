@@ -9,6 +9,14 @@
 let source = """
 #! /bin/sparrow
 #if // this is commented
+*
+ +
+ ? // that was an operator
+ ?// and this is the same operator
+ */ // this is identified as an unknown
+ ..*/.. // unknown
+ +.+ // three tokens
+ .+. // one token
 /**/#elseif/**/
 /* /* /* this is commented */ */ */
 /*/ this is commented */

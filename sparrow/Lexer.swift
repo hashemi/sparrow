@@ -52,6 +52,31 @@ class Lexer {
             skipSlashStarComment()
             return Token(.comment, "")
         
+        case "!" where isLeftBound(before: start):
+            return formToken(.exclaimPostfix, from: start)
+        case "!":
+            return operatorIdentifier()
+        
+        case "?" where isLeftBound(before: start):
+            return formToken(.questionPostfix, from: start)
+        case "?":
+            return operatorIdentifier()
+        
+        case "/": fallthrough
+        case "%": fallthrough
+        case "<": fallthrough
+        case ">": fallthrough
+        case "=": fallthrough
+        case "-": fallthrough
+        case "+": fallthrough
+        case "*": fallthrough
+        case "&": fallthrough
+        case "|": fallthrough
+        case "^": fallthrough
+        case "~": fallthrough
+        case ".":
+            return operatorIdentifier()
+        
         default: return formToken(.unknown, from: start)
         }
         
@@ -109,6 +134,151 @@ class Lexer {
         }
     }
     
+    func isLeftBound(before start: String.UnicodeScalarIndex) -> Bool {
+        // don't mess with original scanner
+        var scanner = self.scanner
+        
+        scanner.rewind(to: start)
+        
+        if scanner.isAtStart { return false }
+        
+        scanner.putback()
+        switch scanner.peek {
+        case " ": fallthrough
+        case "\r": fallthrough
+        case "\n": fallthrough
+        case "\t": fallthrough // whitespace
+        case "(": fallthrough
+        case "[": fallthrough
+        case "{": fallthrough // opening delimiters
+        case ",": fallthrough
+        case ";": fallthrough
+        case ":": fallthrough // expression separators
+        case "\0": // whitespace / last char in file
+            return false
+            
+        case "/":
+            if scanner.isAtStart { return true }
+            scanner.putback()
+            return scanner.peek != "*" // End of a slash-star comment, so whitespace.
+        
+        default: return true
+        }
+    }
+    
+    func isRightBound(after: String.UnicodeScalarIndex, isLeftBound: Bool) -> Bool {
+        // don't mess with original scanner
+        var scanner = self.scanner
+        
+        scanner.rewind(to: after)
+        
+        switch scanner.peek {
+        case " ": fallthrough
+        case "\r": fallthrough
+        case "\n": fallthrough
+        case "\t": fallthrough // whitespace
+        case ")": fallthrough
+        case "]": fallthrough
+        case "}": fallthrough // closing delimiters
+        case ",": fallthrough
+        case ";": fallthrough
+        case ":": fallthrough // expression separators
+        case "\0": // whitespace / last char in file
+            return false
+        
+        case ".":
+            // Prefer the '^' in "x^.y" to be a postfix op, not binary, but the '^' in
+            // "^.y" to be a prefix op, not binary.
+            return !isLeftBound
+            
+        case "/" where (scanner.peekNext == "/" || scanner.peekNext == "*"):
+            return false
+            
+        default:
+            return true
+        }
+    }
+    
+    func operatorIdentifier() -> Token {
+        scanner.putback()
+        let start = scanner.current
+        let canHavePeriods = scanner.peek == "."
+        
+        _ = scanner.match { $0.isOperatorHead }
+        
+        scanner.skip {
+            if !$0.isOperatorBody { return false }
+            if $0 == "." && !canHavePeriods { return false }
+
+            // If there is a "//" or "/*" in the middle of an identifier token,
+            // it starts a comment.
+            if $0 == "/" && ($1 == "/" || $1 == "*") { return false }
+            
+            return true
+        }
+        
+        let leftBound = isLeftBound(before: start)
+        let rightBound = isRightBound(after: scanner.current, isLeftBound: leftBound)
+        
+        let text = scanner.text(from: start)
+        switch text {
+        case "=":
+            // FIXME: if leftBound != rightBound then make a fix it suggestion
+            // add a space where it isn't bound
+            return formToken(.equal, with: text)
+        case "&" where !(leftBound == rightBound || leftBound):
+            return formToken(.ampPrefix, with: text)
+        case "." where leftBound == rightBound:
+            return formToken(.period, with: text)
+        case "." where rightBound:
+            return formToken(.periodPrefix, with: text)
+        case ".":
+            // If left bound but not right bound because there is just some horizontal
+            // whitespace before the next token, its addition is probably incorrect.
+            var afterHorzWhitespace = scanner
+            afterHorzWhitespace.skip(over: [" ", "\t"])
+            if isRightBound(after: afterHorzWhitespace.current, isLeftBound: leftBound)
+                // Don't consider comments to be this.  A leading slash is probably
+                // either // or /* and most likely occurs just in our testsuite for
+                // expected-error lines.
+                && afterHorzWhitespace.peek != "/" {
+                // FIXME: make a fixit suggestion to remove whitespace between
+                // the "." and the end of horizontal whitespace
+                return formToken(.period, with: text)
+            }
+            // Otherwise, it is probably a missing member.
+            // FIXME: diagnose expected member name
+            return formToken(.unknown, from: start)
+        case "?" where leftBound:
+            return formToken(.questionPostfix, with: text)
+        case "?" where !leftBound:
+            return formToken(.questionInfix, with: text)
+        case "->": return formToken(.arrow, with: text)
+        case "*/":
+            // FIXME: diagnose unexpeceted block comment end
+            return formToken(.unknown, with: text)
+        case _ where text.count > 2:
+            var finder = Scanner(text)
+            finder.skip { $0 != "*"}
+            if finder.peekNext == "/" {
+                // FIXME: diagnose unexpeceted block comment end
+                return formToken(.unknown, with: text)
+            }
+        default: break
+        }
+        
+        switch (leftBound, rightBound) {
+        case (true, true):
+            return formToken(.operBinaryUnspaced, with: text)
+        case (false, false):
+            return formToken(.operBinarySpaced, with: text)
+        case (true, false):
+            return formToken(.operPostfix, with: text)
+        case (false, true):
+            return formToken(.operPrefix, with: text)
+        }
+    }
+    
     func skipToEndOfLine() {
         while !scanner.isAtEnd {
             switch scanner.advance() {
@@ -151,7 +321,11 @@ class Lexer {
     }
     
     func formToken(_ kind: Token.Kind, from start: String.UnicodeScalarIndex) -> Token {
-        let token = Token(kind, scanner.text(from: start), isFirstInLine: firstInLine)
+        return formToken(kind, with: scanner.text(from: start))
+    }
+    
+    func formToken(_ kind: Token.Kind, with text: String) -> Token {
+        let token = Token(kind, text, isFirstInLine: firstInLine)
         if token.kind != .whitespace {
             firstInLine = false
         }

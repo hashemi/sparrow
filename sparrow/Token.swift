@@ -9,6 +9,7 @@
 struct Token {
     enum Kind {
         case whitespace
+        case comment
 
         case poundIf
         case poundElse
@@ -38,7 +39,18 @@ struct Token {
         
         case backslash
         
-        case comment
+        case equal
+        case ampPrefix
+        case period
+        case periodPrefix
+        case exclaimPostfix
+        case questionPostfix
+        case questionInfix
+        case arrow
+        case operBinaryUnspaced
+        case operBinarySpaced
+        case operPostfix
+        case operPrefix
         
         case eof
         case unknown

@@ -71,4 +71,8 @@ struct Scanner {
     mutating func skip(while filter: (UnicodeScalar) -> Bool) {
         while !isAtEnd && filter(peek) { advance() }
     }
+    
+    mutating func skip(while filter: (UnicodeScalar, UnicodeScalar) -> Bool) {
+        while !isAtEnd && filter(peek, peekNext) { advance() }
+    }
 }
