@@ -8,23 +8,12 @@
 
 let source = """
 #! /bin/sparrow
-let x = /* something */
-#if // comment
-#endif
-x * y
+// comment
+/* /* comment in comment, should only count once */ */
 while true {
-    let x = y.ident()
-    let b: Array<Int> = []
+    let a: Array<Int> = []
+    let b = a.filter { $0 > 1 }
 }
-+
-?// and this is the same operator
-*/ // this is identified as an unknown
-..*/.. // unknown
-+.+ // three tokens
-.+. // one token
-/**/#elseif/**/
-/* /* /* this is commented */ */ */
-/*/ this is commented */
 """
 
 let lexer = Lexer(source)

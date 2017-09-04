@@ -119,6 +119,7 @@ struct Token {
         case operPrefix
         
         case identifier
+        case dollarIdent
         
         case eof
         case unknown

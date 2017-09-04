@@ -80,6 +80,8 @@ class Lexer {
 
         case _ where c.isIdentifierHead:
             return identifier()
+        
+        case "$": return dollarIdent()
 
         default: return formToken(.unknown, from: start)
         }
@@ -293,6 +295,43 @@ class Lexer {
         let text = scanner.text(from: start)
         let kind = Token.Kind(keyword: text) ?? .identifier
         return formToken(kind, with: text)
+    }
+    
+    func dollarIdent() -> Token {
+        scanner.putback()
+        let start = scanner.current
+        
+        _ = scanner.match("$")
+        
+        var isAllDigits = true
+        scanner.skip {
+            if $0.isDigit {
+                return true
+            } else if ($0.isClangIdentifierHead || $0 == "$") {
+                isAllDigits = false
+                return true
+            } else {
+                return false
+            }
+        }
+        
+        let text = scanner.text(from: start)
+        
+        if text.count == 1 {
+            // FIXME: diagnose standalone dollar identifier and offer fix it to replace $ with `$`
+            return formToken(.identifier, with: text)
+        }
+        
+        if !isAllDigits {
+            // FIXIT: diagnose expected dollar numeric
+            
+            // Even if we diagnose, we go ahead and form an identifier token,
+            // in part to ensure that the basic behavior of the lexer is
+            // independent of language mode.
+            return formToken(.identifier, with: text)
+        } else {
+            return formToken(.dollarIdent, with: text)
+        }
     }
     
     func skipToEndOfLine() {
