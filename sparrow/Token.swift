@@ -118,6 +118,9 @@ struct Token {
         case operPostfix
         case operPrefix
         
+        case integerLiteral
+        case floatingLiteral
+        
         case identifier
         case dollarIdent
         

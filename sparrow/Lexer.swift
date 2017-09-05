@@ -9,12 +9,18 @@
 class Lexer {
     var scanner: Scanner
     var firstInLine: Bool = true
+    var lastToken: Token = Token(.whitespace, "")
     
     init(_ source: String) {
         scanner = Scanner(source)
     }
     
     func next() -> Token {
+        lastToken = lexToken()
+        return lastToken
+    }
+    
+    func lexToken() -> Token {
         guard !scanner.isAtEnd else {
             return Token(.eof, "", isFirstInLine: firstInLine)
         }
@@ -80,9 +86,12 @@ class Lexer {
 
         case _ where c.isIdentifierHead:
             return identifier()
-        
-        case "$": return dollarIdent()
 
+        case "$": return dollarIdent()
+        
+        case _ where c.isDigit:
+            return number()
+        
         default: return formToken(.unknown, from: start)
         }
         
@@ -332,6 +341,217 @@ class Lexer {
         } else {
             return formToken(.dollarIdent, with: text)
         }
+    }
+    
+    enum ExpectedDigitKind {
+        case binary, octal, decimal, hex
+    }
+
+    func hexNumber() -> Token {
+        let start = scanner.current
+        
+        func expectedDigit() -> Token {
+            scanner.skip { $0.isIdentifierBody }
+            return formToken(.unknown, from: start)
+        }
+        
+        func expectedHexDigit() -> Token {
+            // FIXME: diagnose invalid digit in int literal
+            return expectedDigit()
+        }
+        
+        scanner.advance() // skip over 0
+        scanner.advance() // skip over x
+        
+        // 0x[0-9a-fA-F][0-9a-fA-F_]*
+        if !scanner.match({ $0.isHexDigit }) {
+            return expectedHexDigit()
+        }
+        
+        scanner.skip { $0.isHexDigit || $0 == "_" }
+        
+        if scanner.peek != "." && scanner.peek != "p" && scanner.peek != "P" {
+            if scanner.match({ $0.isIdentifierBody }) {
+                return expectedHexDigit()
+            }
+            
+            return formToken(.integerLiteral, from: start)
+        }
+        
+        var maybeOnDot: Scanner?
+        
+        // (\.[0-9A-Fa-f][0-9A-Fa-f_]*)?
+        if scanner.peek == "." {
+            maybeOnDot = scanner
+            let onDot = scanner
+            
+            scanner.advance() // over the "."
+            
+            // If the character after the '.' is not a digit, assume we have an int
+            // literal followed by a dot expression.
+            if !scanner.peek.isHexDigit {
+                scanner.putback()
+                return formToken(.integerLiteral, from: start)
+            }
+            
+            scanner.skip { $0.isHexDigit || $0 == "_" }
+            
+            if scanner.peek != "p" && scanner.peek != "P" {
+                if !onDot.peekNext.isDigit {
+                    // e.g: 0xff.description
+                    scanner = onDot
+                    return formToken(.integerLiteral, from: start)
+                }
+                
+                // FIXME: diagnose expected binary exponent in hex flaot literal
+                return formToken(.unknown, from: start)
+            }
+        }
+        
+        // [pP][+-]?[0-9][0-9_]*
+        scanner.advance() // skip over p or P
+        
+        let signedExponent = scanner.match({ $0 == "+" || $0 == "-" })
+        
+        if !scanner.peek.isDigit {
+            if let onDot = maybeOnDot, !onDot.peekNext.isDigit && !signedExponent {
+                // e.g: 0xff.fpValue, 0xff.fp
+                scanner = onDot
+                return formToken(.integerLiteral, from: start)
+            }
+            // Note: 0xff.fp+otherExpr can be valid expression. But we don't accept it.
+            
+            // There are 3 cases to diagnose if the exponent starts with a non-digit:
+            // identifier (invalid character), underscore (invalid first character),
+            // non-identifier (empty exponent)
+            if scanner.match({ $0.isIdentifierBody }) {
+                // FIXME: diagnose invalid digit in fp exponent
+                return expectedDigit()
+            } else {
+                // FIXME: diagnose expected digit in fp exponent
+                return expectedDigit()
+            }
+        }
+        
+        scanner.skip { $0.isDigit || $0 == "_" }
+        
+        if scanner.match({ $0.isIdentifierBody }) {
+            // FIXME: diagnose invalid digit in fp exponent
+            return expectedDigit()
+        }
+        
+        return formToken(.floatingLiteral, from: start)
+    }
+    
+    // integer_literal  ::= [0-9][0-9_]*
+    // integer_literal  ::= 0x[0-9a-fA-F][0-9a-fA-F_]*
+    // integer_literal  ::= 0o[0-7][0-7_]*
+    // integer_literal  ::= 0b[01][01_]*
+    // floating_literal ::= [0-9][0-9]_*\.[0-9][0-9_]*
+    // floating_literal ::= [0-9][0-9]*\.[0-9][0-9_]*[eE][+-]?[0-9][0-9_]*
+    // floating_literal ::= [0-9][0-9_]*[eE][+-]?[0-9][0-9_]*
+    // floating_literal ::= 0x[0-9A-Fa-f][0-9A-Fa-f_]*
+    //                        (\.[0-9A-Fa-f][0-9A-Fa-f_]*)?[pP][+-]?[0-9][0-9_]*
+    func number() -> Token {
+        scanner.putback()
+        let start = scanner.current
+        
+        func expectedDigit() -> Token {
+            scanner.skip { $0.isIdentifierBody }
+            return formToken(.unknown, from: start)
+        }
+        
+        func expectedIntDigit(_ digitKind: ExpectedDigitKind) -> Token {
+            // FIXME: diagnose invalid digit in int literal
+            return expectedDigit()
+        }
+        
+        if scanner.peek == "0" && scanner.peekNext == "x" {
+            return hexNumber()
+        }
+        
+        if scanner.peek == "0" && scanner.peekNext == "o" {
+            // 0o[0-7][0-7_]*
+            scanner.advance() // advance over "0"
+            scanner.advance() // advance over "o"
+            
+            if scanner.peek < "0" || scanner.peek > "7" {
+                return expectedIntDigit(.octal)
+            }
+            
+            scanner.skip { ($0 >= "0" && $0 <= "7") || $0 == "_" }
+            
+            if scanner.match({ $0.isIdentifierBody }) {
+                return expectedIntDigit(.octal)
+            }
+            
+            return formToken(.integerLiteral, from: start)
+        }
+
+        if scanner.peek == "0" && scanner.peekNext == "b" {
+            // 0b[01][01_]*
+            scanner.advance() // advance over "0"
+            scanner.advance() // advance over "b"
+            
+            if scanner.peek != "0" && scanner.peek != "1" {
+                return expectedIntDigit(.binary)
+            }
+            
+            scanner.skip(over: ["0", "1", "_"])
+            
+            if scanner.match({ $0.isIdentifierBody }) {
+                return expectedIntDigit(.octal)
+            }
+            
+            return formToken(.integerLiteral, from: start)
+        }
+
+        // Handle a leading [0-9]+, lexing an integer or falling through if we have a
+        // floating point value.
+        scanner.skip { $0.isDigit || $0 == "_" }
+
+        // Lex things like 4.x as '4' followed by a .period.
+        if scanner.peek == "." {
+            // NextToken is the soon to be previous token
+            // Therefore: x.0.1 is sub-tuple access, not x.floatLiteral
+            if !scanner.peekNext.isDigit || lastToken.kind == .period {
+                return formToken(.integerLiteral, from: start)
+            }
+        } else {
+            // Floating literals must have '.', 'e', or 'E' after digits.  If it is
+            // something else, then this is the end of the token.
+            if scanner.peek != "e" && scanner.peek != "E" {
+                if scanner.match({ $0.isIdentifierBody }) {
+                    return expectedIntDigit(.octal)
+                }
+                
+                return formToken(.integerLiteral, from: start)
+            }
+        }
+        
+        // Lex decimal point.
+        if scanner.match(".") {
+            scanner.skip { $0.isDigit || $0 == "_" }
+        }
+        
+        // Lex exponent.
+        if scanner.match({ $0 == "e" || $0 == "E" }) {
+            _ = scanner.match({ $0 == "+" || $0 == "-" })
+            
+            if !scanner.peek.isDigit {
+                // FIXME: diagnose invalid digit in fp exponent or expected digit in fp exponent
+                return expectedDigit()
+            }
+            
+            scanner.skip { $0.isDigit || $0 == "_" }
+            
+            if scanner.match({ $0.isIdentifierBody }) {
+                // FIXME: diagnose invalid digit in fp exponent
+                return expectedDigit()
+            }
+        }
+        
+        return formToken(.floatingLiteral, from: start)
     }
     
     func skipToEndOfLine() {
