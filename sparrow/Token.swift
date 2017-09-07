@@ -122,6 +122,7 @@ struct Token {
         
         case integerLiteral
         case floatingLiteral
+        case stringLiteral
         
         case identifier
         case dollarIdent

@@ -91,6 +91,9 @@ class Lexer {
         
         case _ where c.isDigit:
             return number()
+            
+        case "\"": fallthrough
+        case "'": return string()
         
         case "`": return escapedIdentifier()
             
@@ -556,6 +559,255 @@ class Lexer {
         return formToken(.floatingLiteral, from: start)
     }
     
+    struct CharValue: Equatable {
+        private let value: UInt32
+        
+        static let error = CharValue(UInt32.max - 1)
+        static let end = CharValue(UInt32.max)
+        
+        init(_ value: UInt32) {
+            self.value = value
+        }
+        
+        init(_ scalar: UnicodeScalar) {
+            self.value = scalar.value
+        }
+        
+        var scalar: UnicodeScalar? {
+            return UnicodeScalar(value)
+        }
+        
+        static func ==(lhs: Lexer.CharValue, rhs: Lexer.CharValue) -> Bool {
+            return lhs.value == rhs.value
+        }
+    }
+    
+    /// lexStringLiteral:
+    ///   string_literal ::= ["]([^"\\\n\r]|character_escape)*["]
+    ///   string_literal ::= ["]["]["].*["]["]["] - approximately
+    func string() -> Token {
+        scanner.putback()
+        let start = scanner.current
+        let stopQuote = scanner.advance()
+
+        // NOTE: We only allow single-quote string literals so we can emit useful
+        // diagnostics about changing them to double quotes.
+
+        var wasErroneous = false
+        var multiline = false
+        
+        // Is this the start of a multiline string literal?
+        if stopQuote == "\"" && scanner.peek == "\"" && scanner.peekNext == "\"" {
+            multiline = true
+            scanner.advance()
+            scanner.advance()
+            
+            if scanner.peek != "\n" && scanner.peek != "\r" {
+                // FIXME: diagnose illegal multiline string start, fixit: insert \n
+            }
+        }
+        
+        while true {
+            if scanner.peek == "\\" && scanner.peekNext == "(" {
+                scanner.advance() // skip the "\"
+                scanner.advance() // skip the "("
+                // Consume tokens until we hit the corresponding ')'.
+                skipToEndOfInterpolatedExpression(multiline)
+                
+                if !scanner.match(")") {
+                    wasErroneous = true
+                }
+                
+                continue
+            }
+            
+            // String literals cannot have \n or \r in them (unless multiline).
+            if ((scanner.peek == "\r" || scanner.peek == "\n") && !multiline) || scanner.isAtEnd {
+                // FIXME: diagnose unterminated string
+                return formToken(.unknown, from: start)
+            }
+            
+            let charValue = character(multiline, stopQuote: stopQuote)
+            wasErroneous = wasErroneous || charValue == .error
+            
+            // If this is the end of string, we are done.  If it is a normal character
+            // or an already-diagnosed error, just munch it.
+            if charValue == .end {
+                scanner.advance()
+                if wasErroneous {
+                    return formToken(.unknown, from: start)
+                }
+                
+                if stopQuote == "'" {
+                    // Complain about single-quote string and suggest replacement with
+                    // double-quoted equivalent.
+                
+                    // FIXME: diagnose single quote string, fixit: replace ' with ", unescape \', escape "
+                }
+                
+                if multiline {
+                    if scanner.advance() == "\"" && scanner.peek == "\"" && scanner.peekNext == "\"" {
+                        scanner.advance() // advance over second "
+                        scanner.advance() // advance over third "
+                        
+                        // FIXME: validateMultilineIdents of string & diagnose errors in it
+
+                        // FIXME: indicate that token is of a multiline string
+                        return formToken(.stringLiteral, from: start)
+                    } else {
+                        continue
+                    }
+                }
+                
+                // FIXME: indiate that token is of a multiline string, if applicable
+                return formToken(.stringLiteral, from: start)
+            }
+        }
+    }
+    
+    ///   unicode_character_escape ::= [\]u{hex+}
+    ///   hex                      ::= [0-9a-fA-F]
+    func unicodeEscape() -> CharValue {
+        scanner.match("{")
+        
+        let digitStart = scanner.current
+        
+        scanner.skip { $0.isHexDigit }
+        
+        guard scanner.peek == "}" else {
+            // FIXME: diagnose invalid u escape rbrace
+            return .error
+        }
+        let digits = scanner.text(from: digitStart)
+        
+        scanner.advance() // over the "}"
+        
+        if digits.count < 1 || digits.count > 8 {
+            // FIXME: diagnose invalid u escape
+            return .error
+        }
+        
+        return CharValue(UInt32(digits, radix: 16)!)
+    }
+    
+    /// lexCharacter - Read a character and return its UTF32 code.  If this is the
+    /// end of enclosing string/character sequence (i.e. the character is equal to
+    /// 'StopQuote'), this returns ~0U and leaves 'CurPtr' pointing to the terminal
+    /// quote.  If this is a malformed character sequence, it emits a diagnostic
+    /// (when EmitDiagnostics is true) and returns ~1U.
+    ///
+    ///   character_escape  ::= [\][\] | [\]t | [\]n | [\]r | [\]" | [\]' | [\]0
+    ///   character_escape  ::= unicode_character_escape
+    func character(_ multiline: Bool, stopQuote: UnicodeScalar) -> CharValue {
+        if scanner.isAtEnd {
+            // FIXME: diagnose unterminated string
+            return .error
+        }
+        
+        let c = scanner.advance()
+        switch c {
+        case "\"": fallthrough
+        case "'":
+            // If we found a closing quote character, we're done.
+            if stopQuote == c {
+                scanner.putback()
+                return .end
+            }
+            // Otherwise, this is just a character.
+            return CharValue(c)
+        
+        case "\n": fallthrough // String literals cannot have \n or \r in them.
+        case "\r":
+            if multiline { // ... unless they are multiline
+                return CharValue(c)
+            }
+            
+            // FIXME: diagnose unterminated string
+            return .error
+        
+        case "\\":  // Escapes.
+            break
+
+        default:
+            // Normal characters are part of the string.
+            // If this is a "high" UTF-8 character, validate it.
+            if !c.isASCII {
+                if !c.isPrintable {
+                    if !multiline && c == "\t" {
+                        // FIXME: diagnose unprintable ascii character
+                    }
+                }
+            }
+            return CharValue(c)
+        }
+        
+        // Escape processing.  We already ate the "\".
+        switch scanner.peek {
+            
+        // Simple single-character escapes.
+        case "0": scanner.advance(); return CharValue("\0")
+        case "n": scanner.advance(); return CharValue("\n")
+        case "r": scanner.advance(); return CharValue("\r")
+        case "t": scanner.advance(); return CharValue("\t")
+        case "\"": scanner.advance(); return CharValue("\"")
+        case "'": scanner.advance(); return CharValue("'")
+        case "\\": scanner.advance(); return CharValue("\\")
+        
+        case "u": //  \u HEX HEX HEX HEX
+            scanner.advance()
+            if scanner.peek != "{" {
+                // FIXME: diagnose unicode escape braces
+                return .error
+            }
+            
+            let charValue = unicodeEscape()
+            
+            if charValue == .error {
+                return .error
+            }
+            
+            // Check to see if the encoding is valid.
+            guard let scalar = charValue.scalar else {
+                // FIXME diagnose invalid scalar
+                return .error
+            }
+            
+            return CharValue(scalar)
+            
+        case " ": fallthrough
+        case "\t": fallthrough
+        case "\n": fallthrough
+        case "\r":
+            if multiline && maybeConsumeNewlineEscape() {
+                return CharValue("\n")
+            }
+            fallthrough
+
+        default: // Invalid escape.
+            // FIXME: diagnose invalid escape
+            
+            // If this looks like a plausible escape character, recover as though this
+            // is an invalid escape.
+            _ = scanner.match { $0.isAlphanumeric }
+            return .error
+        }
+    }
+    
+    /// maybeConsumeNewlineEscape - Check for valid elided newline escape and
+    /// move pointer passed in to the character after the end of the line.
+    func maybeConsumeNewlineEscape() -> Bool {
+        scanner.skip(over: [" ", "\t"])
+        
+        if scanner.isAtEnd { return false }
+        
+        if scanner.match("\r") {
+            _ = scanner.match("\n")
+            return true
+        }
+        
+        return scanner.match("\n")
+    }
+    
     func escapedIdentifier() -> Token {
         scanner.putback()
         let quote = scanner.current
@@ -582,6 +834,138 @@ class Lexer {
         
         // The backtick is punctuation.
         return formToken(.backtick, from: quote)
+    }
+    
+    /// skipToEndOfInterpolatedExpression - Given the first character after a \(
+    /// sequence in a string literal (the start of an interpolated expression),
+    /// scan forward to the end of the interpolated expression and return the end.
+    /// On success, the returned pointer will point to the ')' at the end of the
+    /// interpolated expression.  On failure, it will point to the first character
+    /// that cannot be lexed as part of the interpolated expression; this character
+    /// will never be ')'.
+    ///
+    /// This function performs brace and quote matching, keeping a stack of
+    /// outstanding delimiters as it scans the string.
+    func skipToEndOfInterpolatedExpression(_ multiline: Bool) {
+        var openDelimiters: [UnicodeScalar] = []
+        var allowNewline: [Bool] = []
+        allowNewline.append(multiline)
+        
+        func inStringLiteral() -> Bool {
+            return openDelimiters.last == "\"" || openDelimiters.last == "'"
+        }
+        
+        while !scanner.isAtEnd {
+            // This is a simple scanner, capable of recognizing nested parentheses and
+            // string literals but not much else.  The implications of this include not
+            // being able to break an expression over multiple lines in an interpolated
+            // string.  This limitation allows us to recover from common errors though.
+            //
+            // On success scanning the expression body, the real lexer will be used to
+            // relex the body when parsing the expressions.  We let it diagnose any
+            // issues with malformed tokens or other problems.
+            let c = scanner.advance()
+            switch c {
+            // String literals in general cannot be split across multiple lines;
+            // interpolated ones are no exception - unless multiline literals.
+            case "\n": fallthrough
+            case "\r":
+                if allowNewline.last! {
+                    continue
+                }
+
+                // Will be diagnosed as an unterminated string literal.
+                scanner.putback()
+                return
+            
+            case "\"": fallthrough
+            case "'":
+                if !allowNewline.last! && inStringLiteral() {
+                    if openDelimiters.last == c {
+                        // Closing single line string literal.
+                        _ = openDelimiters.popLast()
+                        _ = allowNewline.popLast()
+                    }
+                    // Otherwise, it's just a quote in string literal. e.g. "foo's".
+                    continue
+                }
+                
+                let isMultilineQuote = c == "\"" && scanner.peek == "\"" && scanner.peekNext == "\""
+                if isMultilineQuote {
+                    scanner.advance()
+                    scanner.advance()
+                }
+                
+                if !inStringLiteral() {
+                    // Open string literal
+                    openDelimiters.append(c)
+                    _ = allowNewline.append(isMultilineQuote)
+                    continue
+                }
+                
+                // We are in multiline string literal.
+                if isMultilineQuote {
+                    // Close multiline string literal.
+                    _ = openDelimiters.popLast()
+                    _ = allowNewline.popLast()
+                }
+                
+                // Otherwise, it's just a normal character in multiline string.
+                continue
+                
+            case "\\":
+                if inStringLiteral() {
+                    let escapedChar = scanner.advance()
+                    switch escapedChar {
+                    case "(":
+                        // Entering a recursive interpolated expression
+                        openDelimiters.append("(")
+                        continue
+                    case "\n": fallthrough
+                    case "\r":
+                        if allowNewline.last! {
+                            continue
+                        }
+                        // Don't jump over newline due to preceding backslash!
+                        scanner.putback()
+                        return
+                    default:
+                        continue
+                    }
+                }
+                continue
+
+            // Paren nesting deeper to support "foo = \((a+b)-(c*d)) bar".
+            case "(":
+                if !inStringLiteral() {
+                    openDelimiters.append("(")
+                }
+                continue
+            
+            case ")" where openDelimiters.isEmpty:
+                // No outstanding open delimiters; we're done.
+                scanner.putback()
+                return
+
+            case ")" where openDelimiters.last == "(":
+                // Pop the matching bracket and keep going.
+                _ = openDelimiters.popLast()
+                continue
+            
+            case ")":
+                // It's a right parenthesis in a string literal.
+                continue
+            
+            // Normal token character.
+            default: continue
+            }
+
+        }
+        
+        // If we hit EOF, we fail.
+        if scanner.isAtEnd {
+            // FIXMe: diagnose unterminated string
+        }
     }
     
     func skipToEndOfLine() {
