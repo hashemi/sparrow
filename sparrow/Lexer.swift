@@ -92,6 +92,8 @@ class Lexer {
         case _ where c.isDigit:
             return number()
         
+        case "`": return escapedIdentifier()
+            
         default: return formToken(.unknown, from: start)
         }
         
@@ -552,6 +554,34 @@ class Lexer {
         }
         
         return formToken(.floatingLiteral, from: start)
+    }
+    
+    func escapedIdentifier() -> Token {
+        scanner.putback()
+        let quote = scanner.current
+        scanner.advance()
+        
+        if scanner.match({ $0.isIdentifierHead }) {
+            scanner.skip { $0.isIdentifierBody }
+            
+            // If we have the terminating "`", it's an escaped identifier.
+            if scanner.match("`") {
+                // FIXME: mark it as an escaped identifier?
+                return formToken(.identifier, from: quote)
+            }
+        }
+        
+        // Special case; allow '`$`'.
+        if scanner.peek == "$" && scanner.peekNext == "`" {
+            scanner.advance() // advance over "$"
+            scanner.advance() // advance over "`"
+            
+            // FIXME: mark it as an escaped identifier?
+            return formToken(.identifier, from: quote)
+        }
+        
+        // The backtick is punctuation.
+        return formToken(.backtick, from: quote)
     }
     
     func skipToEndOfLine() {

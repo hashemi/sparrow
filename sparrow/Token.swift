@@ -105,6 +105,8 @@ struct Token {
         
         case backslash
         
+        case backtick
+        
         case equal
         case ampPrefix
         case period
