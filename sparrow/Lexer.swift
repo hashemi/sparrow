@@ -7,9 +7,9 @@
 //
 
 class Lexer {
-    var scanner: Scanner
-    var firstInLine: Bool = true
-    var lastToken: Token?
+    private var scanner: Scanner
+    private var firstInLine: Bool = true
+    private var lastToken: Token?
     
     init(_ source: String) {
         scanner = Scanner(source)
@@ -21,7 +21,7 @@ class Lexer {
         return token
     }
     
-    func lexToken() -> Token {
+    private func lexToken() -> Token {
         guard !scanner.isAtEnd else {
             return formToken(.eof, with: "")
         }
@@ -103,7 +103,7 @@ class Lexer {
         
     }
     
-    func whitespace() -> Token {
+    private func whitespace() -> Token {
         let newlineScalars: Set<UnicodeScalar> = ["\n", "\r"]
         while !scanner.isAtEnd && scanner.peek.isWhitespace {
             if newlineScalars.contains(scanner.advance()) {
@@ -113,7 +113,7 @@ class Lexer {
         return lexToken()
     }
     
-    func hash() -> Token {
+    private func hash() -> Token {
         // Allow a hashbang #! line at the beginning of the file.
         scanner.putback()
         let beforePound = scanner.current
@@ -155,7 +155,7 @@ class Lexer {
         }
     }
     
-    func isLeftBound(before start: String.UnicodeScalarIndex) -> Bool {
+    private func isLeftBound(before start: String.UnicodeScalarIndex) -> Bool {
         // don't mess with original scanner
         var scanner = self.scanner
         
@@ -187,7 +187,7 @@ class Lexer {
         }
     }
     
-    func isRightBound(after: String.UnicodeScalarIndex, isLeftBound: Bool) -> Bool {
+    private func isRightBound(after: String.UnicodeScalarIndex, isLeftBound: Bool) -> Bool {
         // don't mess with original scanner
         var scanner = self.scanner
         
@@ -220,7 +220,7 @@ class Lexer {
         }
     }
     
-    func operatorIdentifier() -> Token {
+    private func operatorIdentifier() -> Token {
         scanner.putback()
         let start = scanner.current
         let canHavePeriods = scanner.peek == "."
@@ -300,7 +300,7 @@ class Lexer {
         }
     }
     
-    func identifier() -> Token {
+    private func identifier() -> Token {
         scanner.putback()
         let start = scanner.current
         
@@ -312,7 +312,7 @@ class Lexer {
         return formToken(kind, with: text)
     }
     
-    func dollarIdent() -> Token {
+    private func dollarIdent() -> Token {
         scanner.putback()
         let start = scanner.current
         
@@ -349,11 +349,11 @@ class Lexer {
         }
     }
     
-    enum ExpectedDigitKind {
+    private enum ExpectedDigitKind {
         case binary, octal, decimal, hex
     }
 
-    func hexNumber() -> Token {
+    private func hexNumber() -> Token {
         let start = scanner.current
         
         func expectedDigit() -> Token {
@@ -458,7 +458,7 @@ class Lexer {
     // floating_literal ::= [0-9][0-9_]*[eE][+-]?[0-9][0-9_]*
     // floating_literal ::= 0x[0-9A-Fa-f][0-9A-Fa-f_]*
     //                        (\.[0-9A-Fa-f][0-9A-Fa-f_]*)?[pP][+-]?[0-9][0-9_]*
-    func number() -> Token {
+    private func number() -> Token {
         scanner.putback()
         let start = scanner.current
         
@@ -560,7 +560,7 @@ class Lexer {
         return formToken(.floatingLiteral, from: start)
     }
     
-    struct CharValue: Equatable {
+    private struct CharValue: Equatable {
         private let value: UInt32
         
         static let error = CharValue(UInt32.max - 1)
@@ -586,7 +586,7 @@ class Lexer {
     /// lexStringLiteral:
     ///   string_literal ::= ["]([^"\\\n\r]|character_escape)*["]
     ///   string_literal ::= ["]["]["].*["]["]["] - approximately
-    func string() -> Token {
+    private func string() -> Token {
         scanner.putback()
         let start = scanner.current
         let stopQuote = scanner.advance()
@@ -668,7 +668,7 @@ class Lexer {
     
     ///   unicode_character_escape ::= [\]u{hex+}
     ///   hex                      ::= [0-9a-fA-F]
-    func unicodeEscape() -> CharValue {
+    private func unicodeEscape() -> CharValue {
         _ = scanner.match("{")
         
         let digitStart = scanner.current
@@ -699,7 +699,7 @@ class Lexer {
     ///
     ///   character_escape  ::= [\][\] | [\]t | [\]n | [\]r | [\]" | [\]' | [\]0
     ///   character_escape  ::= unicode_character_escape
-    func character(_ multiline: Bool, stopQuote: UnicodeScalar) -> CharValue {
+    private func character(_ multiline: Bool, stopQuote: UnicodeScalar) -> CharValue {
         if scanner.isAtEnd {
             // FIXME: diagnose unterminated string
             return .error
@@ -796,7 +796,7 @@ class Lexer {
     
     /// maybeConsumeNewlineEscape - Check for valid elided newline escape and
     /// move pointer passed in to the character after the end of the line.
-    func maybeConsumeNewlineEscape() -> Bool {
+    private func maybeConsumeNewlineEscape() -> Bool {
         scanner.skip(over: [" ", "\t"])
         
         if scanner.isAtEnd { return false }
@@ -809,7 +809,7 @@ class Lexer {
         return scanner.match("\n")
     }
     
-    func escapedIdentifier() -> Token {
+    private func escapedIdentifier() -> Token {
         scanner.putback()
         let quote = scanner.current
         scanner.advance()
@@ -847,7 +847,7 @@ class Lexer {
     ///
     /// This function performs brace and quote matching, keeping a stack of
     /// outstanding delimiters as it scans the string.
-    func skipToEndOfInterpolatedExpression(_ multiline: Bool) {
+    private func skipToEndOfInterpolatedExpression(_ multiline: Bool) {
         var openDelimiters: [UnicodeScalar] = []
         var allowNewline: [Bool] = []
         allowNewline.append(multiline)
@@ -969,7 +969,7 @@ class Lexer {
         }
     }
     
-    func skipToEndOfLine() {
+    private func skipToEndOfLine() {
         while !scanner.isAtEnd {
             switch scanner.advance() {
             case "\n": fallthrough
@@ -981,15 +981,15 @@ class Lexer {
         }
     }
     
-    func skipHashbang() {
+    private func skipHashbang() {
         skipToEndOfLine()
     }
     
-    func skipSlashSlashComment() {
+    private func skipSlashSlashComment() {
         skipToEndOfLine()
     }
     
-    func skipSlashStarComment() {
+    private func skipSlashStarComment() {
         var depth: UInt = 1
         
         while !scanner.isAtEnd {
@@ -1010,11 +1010,11 @@ class Lexer {
         // unterminated slash star comment at eof
     }
     
-    func formToken(_ kind: Token.Kind, from start: String.UnicodeScalarIndex) -> Token {
+    private func formToken(_ kind: Token.Kind, from start: String.UnicodeScalarIndex) -> Token {
         return formToken(kind, with: scanner.text(from: start))
     }
     
-    func formToken(_ kind: Token.Kind, with text: String) -> Token {
+    private func formToken(_ kind: Token.Kind, with text: String) -> Token {
         let token = Token(kind, text, isFirstInLine: firstInLine)
         firstInLine = false
         return token
