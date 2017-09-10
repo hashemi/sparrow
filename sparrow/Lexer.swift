@@ -34,7 +34,7 @@ class Lexer {
         case "\n": fallthrough
         case "\r":
             firstInLine = true
-            return whitespace()
+            fallthrough
         case _ where c.isWhitespace: return whitespace()
         
         case "@": return formToken(.atSign, from: start)
@@ -61,14 +61,12 @@ class Lexer {
         
         case "!" where isLeftBound(before: start):
             return formToken(.exclaimPostfix, from: start)
-        case "!":
-            return operatorIdentifier()
         
         case "?" where isLeftBound(before: start):
             return formToken(.questionPostfix, from: start)
-        case "?":
-            return operatorIdentifier()
         
+        case "!": fallthrough
+        case "?": fallthrough
         case "/": fallthrough
         case "%": fallthrough
         case "<": fallthrough
