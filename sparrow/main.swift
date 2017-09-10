@@ -7,6 +7,9 @@
 //
 
 let source = """
+let a = 12.3e-5
+0xfff/*
+*/ while true { break }
 "\\(i + v + '' + "\\()") \\(a * (x + y) * z)" + ""
 """
 

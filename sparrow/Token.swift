@@ -141,7 +141,9 @@ struct Token {
 
 extension Token: CustomStringConvertible {
     var description: String {
-        return "\(kind)(\"\(text)\")"
+        let content = text.isEmpty ? "" : text.debugDescription
+        let first = isFirstInLine ? " firstInLine" : ""
+        return "\(kind)(\(content)\(first))"
     }
 }
 
