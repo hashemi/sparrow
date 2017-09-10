@@ -74,9 +74,6 @@ struct Token {
         
         case `_`
         
-        case whitespace
-        case comment
-
         case poundIf
         case poundElse
         case poundElseif

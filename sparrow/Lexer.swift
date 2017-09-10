@@ -9,15 +9,16 @@
 class Lexer {
     var scanner: Scanner
     var firstInLine: Bool = true
-    var lastToken: Token = Token(.whitespace, "")
+    var lastToken: Token?
     
     init(_ source: String) {
         scanner = Scanner(source)
     }
     
     func next() -> Token {
-        lastToken = lexToken()
-        return lastToken
+        let token = lexToken()
+        lastToken = token
+        return token
     }
     
     func lexToken() -> Token {
@@ -52,11 +53,11 @@ class Lexer {
             
         case "/" where scanner.match("/"):
             skipSlashSlashComment()
-            return Token(.comment, "")
+            return lexToken()
         
         case "/" where scanner.match("*"):
             skipSlashStarComment()
-            return Token(.comment, "")
+            return lexToken()
         
         case "!" where isLeftBound(before: start):
             return formToken(.exclaimPostfix, from: start)
@@ -109,7 +110,7 @@ class Lexer {
                 firstInLine = true
             }
         }
-        return Token(.whitespace, "")
+        return lexToken()
     }
     
     func hash() -> Token {
@@ -519,7 +520,7 @@ class Lexer {
         if scanner.peek == "." {
             // NextToken is the soon to be previous token
             // Therefore: x.0.1 is sub-tuple access, not x.floatLiteral
-            if !scanner.peekNext.isDigit || lastToken.kind == .period {
+            if !scanner.peekNext.isDigit || lastToken?.kind == .period {
                 return formToken(.integerLiteral, from: start)
             }
         } else {
@@ -668,7 +669,7 @@ class Lexer {
     ///   unicode_character_escape ::= [\]u{hex+}
     ///   hex                      ::= [0-9a-fA-F]
     func unicodeEscape() -> CharValue {
-        scanner.match("{")
+        _ = scanner.match("{")
         
         let digitStart = scanner.current
         
@@ -1015,9 +1016,7 @@ class Lexer {
     
     func formToken(_ kind: Token.Kind, with text: String) -> Token {
         let token = Token(kind, text, isFirstInLine: firstInLine)
-        if token.kind != .whitespace {
-            firstInLine = false
-        }
+        firstInLine = false
         return token
     }
 }
