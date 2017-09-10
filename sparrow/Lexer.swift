@@ -23,7 +23,7 @@ class Lexer {
     
     func lexToken() -> Token {
         guard !scanner.isAtEnd else {
-            return Token(.eof, "", isFirstInLine: firstInLine)
+            return formToken(.eof, with: "")
         }
         
         let start = scanner.current
