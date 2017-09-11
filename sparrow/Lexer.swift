@@ -9,16 +9,15 @@
 class Lexer {
     private var scanner: Scanner
     private var firstInLine: Bool = true
-    private var lastToken: Token?
+    private var lastToken = Token(.unprimed, "", isFirstInLine: false)
     
     init(_ source: String) {
         scanner = Scanner(source)
     }
     
     func next() -> Token {
-        let token = lexToken()
-        lastToken = token
-        return token
+        lastToken = lexToken()
+        return lastToken
     }
     
     private func lexToken() -> Token {
@@ -518,7 +517,7 @@ class Lexer {
         if scanner.peek == "." {
             // NextToken is the soon to be previous token
             // Therefore: x.0.1 is sub-tuple access, not x.floatLiteral
-            if !scanner.peekNext.isDigit || lastToken?.kind == .period {
+            if !scanner.peekNext.isDigit || lastToken.kind == .period {
                 return formToken(.integerLiteral, from: start)
             }
         } else {

@@ -126,6 +126,7 @@ struct Token {
         
         case eof
         case unknown
+        case unprimed
     }
     
     let kind: Kind
