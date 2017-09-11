@@ -66,11 +66,6 @@ struct Token {
         case `true`
         case `try`
         case `throws`
-        case `__FILE__`
-        case `__LINE__`
-        case `__COLUMN__`
-        case `__FUNCTION__`
-        case `__DSO_HANDLE__`
         
         case `_`
         
@@ -209,11 +204,6 @@ extension Token.Kind {
         case "true": self = .true
         case "try": self = .try
         case "throws": self = .throws
-        case "__FILE__": self = .__FILE__
-        case "__LINE__": self = .__LINE__
-        case "__COLUMN__": self = .__COLUMN__
-        case "__FUNCTION__": self = .__FUNCTION__
-        case "__DSO_HANDLE__": self = .__DSO_HANDLE__
         case "_": self = ._
         default: return nil
         }
